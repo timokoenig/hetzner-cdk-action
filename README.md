@@ -1,7 +1,3 @@
-<p align="center">
-  <a href="https://github.com/timokoenig/hetzner-cdk-action/actions"><img alt="hetzner-cdk-action status" src="https://github.com/timokoenig/hetzner-cdk-action/workflows/build-test/badge.svg"></a>
-</p>
-
 # Deploy Hetzner cloud template via Github Action
 
 Use this template to deploy a Hetzner cloud template to the Hetzner cloud.
