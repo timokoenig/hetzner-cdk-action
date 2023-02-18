@@ -20,12 +20,8 @@ async function run(): Promise<void> {
   const githubWorkspace = process.env.GITHUB_WORKSPACE
   if (!githubWorkspace) throw new Error('Env GITHUB_WORKSPACE not set')
 
-  const githubActionRepository = process.env.GITHUB_ACTION_REPOSITORY?.replace(
-    '/',
-    '-'
-  ) // important! hetzner will reject the deployment when the name contains characters like `/`
-  if (!githubActionRepository)
-    throw new Error('Env GITHUB_ACTION_REPOSITORY not set')
+  const githubRepository = process.env.GITHUB_REPOSITORY?.replace('/', '-') // important! hetzner will reject the deployment when the name contains characters like `/`
+  if (!githubRepository) throw new Error('Env GITHUB_REPOSITORY not set')
 
   core.info('[GHAction] Read cloud template')
   const cloudTemplate = fs.readFileSync(
@@ -34,10 +30,8 @@ async function run(): Promise<void> {
   )
   const config: HetznerConfig = yaml.parse(cloudTemplate)
 
-  core.info(
-    `[GHAction] Set cloud template namespace to ${githubActionRepository}`
-  )
-  config.namespace = githubActionRepository
+  core.info(`[GHAction] Set cloud template namespace to ${githubRepository}`)
+  config.namespace = githubRepository
   const configString = yaml.stringify(config, {lineWidth: -1})
 
   core.info('[GHAction] Import cloud template')
