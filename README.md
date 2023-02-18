@@ -68,6 +68,8 @@ jobs:
 
 Save everything and push it on the main branch. You should see the Github Action deploy your cloud template to Hetzner cloud.
 
+> Important: Make sure your hetzner.yml is not excluded via gitignore
+
 After the deployment is done, the action will display the public IP of the server. Use this to create an A-Record in you DNS config to properly access the service through your domain. The ACME proxy companion on the server will automatically request an LetsEncrypt SSL certificate shortly after the DNS settings have been updated.
 
 # Hetzner Cloud Development Kit
