@@ -62,6 +62,9 @@ jobs:
     steps:
       - uses: actions/checkout@v3.1.0
       - uses: timokoenig/hetzner-cdk-action@0.1.0
+    env:
+      CDK_DEBUG: 0
+      HETZNER_AUTH_TOKEN: ${{ secrets.HETZNER_AUTH_TOKEN }}
 ```
 
 ## 5. Deployment
@@ -70,7 +73,11 @@ Save everything and push it on the main branch. You should see the Github Action
 
 > Important: Make sure your hetzner.yml is not excluded via gitignore
 
-After the deployment is done, the action will display the public IP of the server. Use this to create an A-Record in you DNS config to properly access the service through your domain. The ACME proxy companion on the server will automatically request an LetsEncrypt SSL certificate shortly after the DNS settings have been updated.
+After the deployment is done, the action will display the public IP of the server. Use this to create an A-Record in you DNS config to properly access the service through your domain. The ACME proxy companion on the server will automatically request an LetsEncrypt SSL certificate shortly after the DNS settings have been updated. It might take an hour until the certificate gets created.
+
+# Troubleshooting
+
+If you're encountering a problem, enable the CDK debug by setting the env variable `CDK_DEBUG=1`.
 
 # Hetzner Cloud Development Kit
 
