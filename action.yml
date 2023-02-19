@@ -1,6 +1,9 @@
 name: 'Hetzner CDK Action'
 description: 'Deploy Hetzner cloud template via Github Action'
 author: 'timokoenig'
+branding:
+  icon: 'box'
+  color: 'red'
 env:
   NODE_ENV: 'production'
 runs:
