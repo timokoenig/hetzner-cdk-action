@@ -1808,6 +1808,10 @@ function checkBypass(reqUrl) {
     if (!reqUrl.hostname) {
         return false;
     }
+    const reqHost = reqUrl.hostname;
+    if (isLoopbackAddress(reqHost)) {
+        return true;
+    }
     const noProxy = process.env['no_proxy'] || process.env['NO_PROXY'] || '';
     if (!noProxy) {
         return false;
@@ -1833,13 +1837,24 @@ function checkBypass(reqUrl) {
         .split(',')
         .map(x => x.trim().toUpperCase())
         .filter(x => x)) {
-        if (upperReqHosts.some(x => x === upperNoProxyItem)) {
+        if (upperNoProxyItem === '*' ||
+            upperReqHosts.some(x => x === upperNoProxyItem ||
+                x.endsWith(`.${upperNoProxyItem}`) ||
+                (upperNoProxyItem.startsWith('.') &&
+                    x.endsWith(`${upperNoProxyItem}`)))) {
             return true;
         }
     }
     return false;
 }
 exports.checkBypass = checkBypass;
+function isLoopbackAddress(host) {
+    const hostLower = host.toLowerCase();
+    return (hostLower === 'localhost' ||
+        hostLower.startsWith('127.') ||
+        hostLower.startsWith('[::1]') ||
+        hostLower.startsWith('[0:0:0:0:0:0:0:1]'));
+}
 //# sourceMappingURL=proxy.js.map
 
 /***/ }),
@@ -17809,7 +17824,7 @@ class Help {
     // Description
     const commandDescription = helper.commandDescription(cmd);
     if (commandDescription.length > 0) {
-      output = output.concat([commandDescription, '']);
+      output = output.concat([helper.wrap(commandDescription, helpWidth, 0), '']);
     }
 
     // Arguments
@@ -17878,24 +17893,27 @@ class Help {
    */
 
   wrap(str, width, indent, minColumnWidth = 40) {
-    // Detect manually wrapped and indented strings by searching for line breaks
-    // followed by multiple spaces/tabs.
-    if (str.match(/[\n]\s+/)) return str;
+    // Full \s characters, minus the linefeeds.
+    const indents = ' \\f\\t\\v\u00a0\u1680\u2000-\u200a\u202f\u205f\u3000\ufeff';
+    // Detect manually wrapped and indented strings by searching for line break followed by spaces.
+    const manualIndent = new RegExp(`[\\n][${indents}]+`);
+    if (str.match(manualIndent)) return str;
     // Do not wrap if not enough room for a wrapped column of text (as could end up with a word per line).
     const columnWidth = width - indent;
     if (columnWidth < minColumnWidth) return str;
 
     const leadingStr = str.slice(0, indent);
-    const columnText = str.slice(indent);
-
+    const columnText = str.slice(indent).replace('\r\n', '\n');
     const indentString = ' '.repeat(indent);
-    const regex = new RegExp('.{1,' + (columnWidth - 1) + '}([\\s\u200B]|$)|[^\\s\u200B]+?([\\s\u200B]|$)', 'g');
+    const zeroWidthSpace = '\u200B';
+    const breaks = `\\s${zeroWidthSpace}`;
+    // Match line end (so empty lines don't collapse),
+    // or as much text as will fit in column, or excess text up to first break.
+    const regex = new RegExp(`\n|.{1,${columnWidth - 1}}([${breaks}]|$)|[^${breaks}]+?([${breaks}]|$)`, 'g');
     const lines = columnText.match(regex) || [];
     return leadingStr + lines.map((line, i) => {
-      if (line.slice(-1) === '\n') {
-        line = line.slice(0, line.length - 1);
-      }
-      return ((i > 0) ? indentString : '') + line.trimRight();
+      if (line === '\n') return ''; // preserve empty lines
+      return ((i > 0) ? indentString : '') + line.trimEnd();
     }).join('\n');
   }
 }
@@ -26679,7 +26697,7 @@ exports.visitAsync = visitAsync;
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
 "use strict";
-// Axios v1.3.3 Copyright (c) 2023 Matt Zabriskie and contributors
+// Axios v1.3.4 Copyright (c) 2023 Matt Zabriskie and contributors
 
 
 const FormData$1 = __nccwpck_require__(4334);
@@ -28633,7 +28651,7 @@ function buildFullPath(baseURL, requestedURL) {
   return requestedURL;
 }
 
-const VERSION = "1.3.3";
+const VERSION = "1.3.4";
 
 function parseProtocol(url) {
   const match = /^([-+\w]{1,25})(:?\/\/|:)/.exec(url);
@@ -29195,15 +29213,39 @@ function setProxy(options, configProxy, location) {
 
 const isHttpAdapterSupported = typeof process !== 'undefined' && utils.kindOf(process) === 'process';
 
+// temporary hotfix
+
+const wrapAsync = (asyncExecutor) => {
+  return new Promise((resolve, reject) => {
+    let onDone;
+    let isDone;
+
+    const done = (value, isRejected) => {
+      if (isDone) return;
+      isDone = true;
+      onDone && onDone(value, isRejected);
+    };
+
+    const _resolve = (value) => {
+      done(value);
+      resolve(value);
+    };
+
+    const _reject = (reason) => {
+      done(reason, true);
+      reject(reason);
+    };
+
+    asyncExecutor(_resolve, _reject, (onDoneHandler) => (onDone = onDoneHandler)).catch(_reject);
+  })
+};
+
 /*eslint consistent-return:0*/
 const httpAdapter = isHttpAdapterSupported && function httpAdapter(config) {
-  /*eslint no-async-promise-executor:0*/
-  return new Promise(async function dispatchHttpRequest(resolvePromise, rejectPromise) {
-    let data = config.data;
-    const responseType = config.responseType;
-    const responseEncoding = config.responseEncoding;
+  return wrapAsync(async function dispatchHttpRequest(resolve, reject, onDone) {
+    let {data} = config;
+    const {responseType, responseEncoding} = config;
     const method = config.method.toUpperCase();
-    let isFinished;
     let isDone;
     let rejected = false;
     let req;
@@ -29211,10 +29253,7 @@ const httpAdapter = isHttpAdapterSupported && function httpAdapter(config) {
     // temporary internal emitter until the AxiosRequest class will be implemented
     const emitter = new EventEmitter__default["default"]();
 
-    function onFinished() {
-      if (isFinished) return;
-      isFinished = true;
-
+    const onFinished = () => {
       if (config.cancelToken) {
         config.cancelToken.unsubscribe(abort);
       }
@@ -29224,28 +29263,15 @@ const httpAdapter = isHttpAdapterSupported && function httpAdapter(config) {
       }
 
       emitter.removeAllListeners();
-    }
+    };
 
-    function done(value, isRejected) {
-      if (isDone) return;
-
+    onDone((value, isRejected) => {
       isDone = true;
-
       if (isRejected) {
         rejected = true;
         onFinished();
       }
-
-      isRejected ? rejectPromise(value) : resolvePromise(value);
-    }
-
-    const resolve = function resolve(value) {
-      done(value);
-    };
-
-    const reject = function reject(value) {
-      done(value, true);
-    };
+    });
 
     function abort(reason) {
       emitter.emit('abort', !reason || reason.type ? new CanceledError(null, config, req) : reason);
@@ -32005,24 +32031,30 @@ volumes:
 }
 function defaultCloudConfig(options) {
   const dockerComposeData = createDockerComposeData(options);
+  let commands = [
+    "ufw default deny incoming",
+    "ufw default allow outgoing",
+    "ufw allow 80",
+    "ufw allow 443",
+    "ufw allow ssh",
+    'sed -i "$ a DEFAULT_FORWARD_POLICY=\\"ACCEPT\\"" /etc/default/ufw',
+    "ufw enable",
+    "ufw reload",
+    "mkdir app && cd app",
+    `echo "${dockerComposeData}" | base64 -d > docker-compose.yml`
+  ];
+  const dockerUsername = process.env.HETZNER_DOCKER_USERNAME;
+  const dockerToken = process.env.HETZNER_DOCKER_TOKEN;
+  if (dockerUsername && dockerToken) {
+    commands.push(`docker login -u ${dockerUsername} -p ${dockerToken}`);
+  }
+  commands.push("docker-compose up -d");
   const configYaml = yaml__namespace.stringify(
     {
       packages: ["ufw", "docker", "docker-compose"],
       package_update: true,
       package_upgrade: true,
-      runcmd: [
-        "ufw default deny incoming",
-        "ufw default allow outgoing",
-        "ufw allow 80",
-        "ufw allow 443",
-        "ufw allow ssh",
-        'sed -i "$ a DEFAULT_FORWARD_POLICY=\\"ACCEPT\\"" /etc/default/ufw',
-        "ufw enable",
-        "ufw reload",
-        "mkdir app && cd app",
-        `echo "${dockerComposeData}" | base64 -d > docker-compose.yml`,
-        "docker-compose up -d"
-      ]
+      runcmd: commands
     },
     { lineWidth: -1 }
   );
@@ -32395,7 +32427,7 @@ class Server {
   }
 }
 
-const CDK_VERSION = "0.1.5";
+const CDK_VERSION = "0.1.6";
 const ALL_AVAILABLE_RESOURCES = [PrimaryIP, FloatingIP, Server, SSHKey];
 class CDK {
   _resources = [];
