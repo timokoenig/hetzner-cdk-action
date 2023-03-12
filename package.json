@@ -27,7 +27,7 @@
   "dependencies": {
     "@actions/core": "^1.10.0",
     "fs": "^0.0.1-security",
-    "hetzner-cdk": "^0.1.6",
+    "hetzner-cdk": "^0.1.7",
     "yaml": "^2.2.0"
   },
   "devDependencies": {
