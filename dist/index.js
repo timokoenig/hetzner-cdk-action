@@ -32045,8 +32045,9 @@ function defaultCloudConfig(options) {
   ];
   const dockerUsername = process.env.HETZNER_DOCKER_USERNAME;
   const dockerToken = process.env.HETZNER_DOCKER_TOKEN;
+  const dockerRegistry = process.env.HETZNER_DOCKER_REGISTRY ?? "";
   if (dockerUsername && dockerToken) {
-    commands.push(`docker login -u ${dockerUsername} -p ${dockerToken}`);
+    commands.push(`docker login -u ${dockerUsername} -p ${dockerToken} ${dockerRegistry}`);
   }
   commands.push("docker-compose up -d");
   const configYaml = yaml__namespace.stringify(
@@ -32427,7 +32428,7 @@ class Server {
   }
 }
 
-const CDK_VERSION = "0.1.6";
+const CDK_VERSION = "0.1.7";
 const ALL_AVAILABLE_RESOURCES = [PrimaryIP, FloatingIP, Server, SSHKey];
 class CDK {
   _resources = [];
